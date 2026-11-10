@@ -1,0 +1,13 @@
+{
+  "name": "英语听写",
+  "short_name": "听写",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fffbea",
+  "theme_color": "#f59e0b",
+  "icons": [
+    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
