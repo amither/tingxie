@@ -9,9 +9,15 @@ function dayStart(now, offset = 0) {
   return d.getTime();
 }
 
+// crypto.randomUUID 只在 HTTPS/localhost 下可用；局域网 http 访问时退回到随机串
+export function newId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+}
+
 export function newCard({ en, zh, batch }, now = new Date()) {
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     en, zh, batch,
     box: 0, dueAt: 0, reps: 0, lapses: 0,
     createdAt: now.getTime(),

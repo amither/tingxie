@@ -96,3 +96,16 @@ test('summary: 统计到期词与今天还可补的新词数', () => {
   const fresh = [1, 2, 3].map((i) => card({ id: 'n' + i }));
   assert.deepEqual(summary([due, ...fresh], NOW, { sessionSize: 10, newPerDay: 2 }), { due: 1, newAvail: 2 });
 });
+
+test('newCard: 没有 crypto.randomUUID（局域网 http）时仍能生成不重复的 id', () => {
+  const desc = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  Object.defineProperty(globalThis, 'crypto', { value: {}, configurable: true });
+  try {
+    const a = newCard({ en: 'a', zh: '啊', batch: 'x' }, NOW);
+    const b = newCard({ en: 'b', zh: '波', batch: 'x' }, NOW);
+    assert.ok(a.id && b.id);
+    assert.notEqual(a.id, b.id);
+  } finally {
+    Object.defineProperty(globalThis, 'crypto', desc);
+  }
+});

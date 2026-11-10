@@ -74,12 +74,23 @@ async function showReview(root, navigate, entries, unrecognized, batchDefault) {
     const now = new Date();
     const batch = batchInput.value.trim() || batchDefault;
     const out = [];
+    const seenInBatch = new Set(); // 校对页里同一个词出现两次时只存一份
     for (const r of todo) {
-      const dup = existing.get(r.en.trim().toLowerCase());
-      if (!dup) out.push(newCard({ en: r.en.trim(), zh: r.zh.trim(), batch }, now));
-      else if (r.onDup === 'overwrite') out.push({ ...dup, zh: r.zh.trim() });
+      const key = r.en.trim().toLowerCase();
+      const dup = existing.get(key);
+      if (!dup) {
+        if (seenInBatch.has(key)) continue;
+        seenInBatch.add(key);
+        out.push(newCard({ en: r.en.trim(), zh: r.zh.trim(), batch }, now));
+      } else if (r.onDup === 'overwrite') out.push({ ...dup, zh: r.zh.trim() });
     }
-    await putCards(out);
+    try {
+      await putCards(out);
+    } catch (e) {
+      console.error(e);
+      alert('保存失败：' + e.message);
+      return;
+    }
     alert(`已保存 ${out.length} 个词`);
     navigate('home');
   }
