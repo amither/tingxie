@@ -26,3 +26,13 @@ input[type=text], input[type=number], select { font-size: 22px; padding: 8px 10p
 tr.flag td { background: #fef2f2; }
 tr.dup td { background: #fffbeb; }
 .zh .speaker { font-size: 28px; padding: 6px 14px; margin-left: 16px; vertical-align: middle; }
+/* 听写页：键盘弹出时提交按钮不被遮挡 */
+.topbar { display: flex; align-items: center; justify-content: space-between; }
+.topbar .progress { flex: 1; }
+.topbar .small, .topbar-gap { min-width: 72px; }
+.row.center { justify-content: center; }
+.zh { margin: 16px 0 8px; }
+.answer-row { display: flex; gap: 12px; align-items: stretch; margin-top: 12px; }
+.answer-row .answer { flex: 1; min-width: 0; width: auto; }
+.answer-row .submit { font-size: 32px; padding: 0 32px; white-space: nowrap; }
+.feedback { margin: 12px 0; }

@@ -31,7 +31,7 @@ export async function render(root, { navigate }) {
       placeholder: '写出英文单词',
     });
     const feedback = h('div', { class: 'feedback' });
-    const submit = h('button', { class: 'big' }, '提交');
+    const submit = h('button', { class: 'submit' }, '提交');
     let locked = false;
 
     // 退出后残留的定时器不应覆盖当前页面
@@ -63,14 +63,18 @@ export async function render(root, { navigate }) {
     submit.onclick = onSubmit;
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') onSubmit(); });
 
+    // 键盘会盖住屏幕下半部分：提交按钮放在输入框右边，退出放到顶部，关键内容都留在上半屏
     const { done, total } = stats(session);
     mount(root,
-      h('div', { class: 'progress' }, `${practice ? '额外练习 · ' : ''}${Math.min(done + 1, total)} / ${total}`),
+      h('div', { class: 'topbar' },
+        h('button', { class: 'secondary small', onclick: () => navigate('home') }, '退出'),
+        h('div', { class: 'progress' }, `${practice ? '额外练习 · ' : ''}${Math.min(done + 1, total)} / ${total}`),
+        h('span', { class: 'topbar-gap' })),
       h('div', { class: 'zh' }, card.zh,
         h('button', { class: 'secondary small speaker', 'aria-label': '听中文发音', onclick: () => speakChinese(card.zh) }, '🔊')),
-      h('div', { class: 'row' }, h('button', { class: 'secondary small', onclick: () => speak(card.en) }, '🔊 听发音')),
-      input, feedback, submit,
-      h('button', { class: 'secondary small', onclick: () => navigate('home') }, '退出'),
+      h('div', { class: 'row center' }, h('button', { class: 'secondary small', onclick: () => speak(card.en) }, '🔊 听发音')),
+      h('div', { class: 'answer-row' }, input, submit),
+      feedback,
     );
     input.focus();
   }
