@@ -1,4 +1,4 @@
-const CACHE = 'tingxie-v2'; // 改动任何文件后把版本号 +1，旧缓存会在 activate 时清掉
+const CACHE = 'tingxie-v3'; // 改动任何文件后把版本号 +1，旧缓存会在 activate 时清掉
 const CORE = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'src/app.js', 'src/core/scheduler.js', 'src/core/parser.js', 'src/core/session.js',

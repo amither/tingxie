@@ -53,13 +53,20 @@ function newAvailable(cards, now, newPerDay) {
 
 export function pickSession(cards, now, { sessionSize, newPerDay }) {
   const t = now.getTime();
+  // 先取新词：最近导入的批次优先；批内按导入顺序（createdAt 升序）
+  const pool = cards.filter(isNew);
+  const latest = new Map();
+  for (const c of pool) latest.set(c.batch, Math.max(latest.get(c.batch) ?? 0, c.createdAt));
+  pool.sort((a, b) => latest.get(b.batch) - latest.get(a.batch)
+    || (a.batch < b.batch ? -1 : a.batch > b.batch ? 1 : 0)
+    || a.createdAt - b.createdAt);
+  const fresh = pool.slice(0, Math.min(sessionSize, newAvailable(cards, now, newPerDay)));
+  // 名额有剩余再用到期词补：盒子低的优先，同盒子按到期时间
   const due = cards
     .filter((c) => !isNew(c) && c.dueAt <= t)
     .sort((a, b) => a.box - b.box || a.dueAt - b.dueAt)
-    .slice(0, sessionSize);
-  const fresh = cards.filter(isNew).sort((a, b) => a.createdAt - b.createdAt);
-  const room = Math.min(sessionSize - due.length, newAvailable(cards, now, newPerDay));
-  return due.concat(fresh.slice(0, Math.max(0, room)));
+    .slice(0, sessionSize - fresh.length);
+  return fresh.concat(due);
 }
 
 export function summary(cards, now, { newPerDay }) {

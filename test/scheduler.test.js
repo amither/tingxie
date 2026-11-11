@@ -73,11 +73,13 @@ test('pickSession: 先取到期词，盒子低优先，同盒子按到期时间'
   assert.deepEqual(ids, ['c', 'b', 'a']);
 });
 
-test('pickSession: 不足时补新词，受 sessionSize 限制', () => {
+test('pickSession: 先取新词，名额有剩余再用到期词补', () => {
   const due = seen({ id: 'due', dueAt: day(-1) });
   const fresh = [1, 2, 3, 4].map((i) => card({ id: 'n' + i, createdAt: i }));
   const ids = pickSession([due, ...fresh], NOW, { sessionSize: 3, newPerDay: 5 }).map((x) => x.id);
-  assert.deepEqual(ids, ['due', 'n1', 'n2']);
+  assert.deepEqual(ids, ['n1', 'n2', 'n3']); // 新词已占满，到期词排不上
+  const more = pickSession([due, ...fresh], NOW, { sessionSize: 10, newPerDay: 2 }).map((x) => x.id);
+  assert.deepEqual(more, ['n1', 'n2', 'due']); // 新词受每天上限约束，余下名额给到期词
 });
 
 test('pickSession: 每天新词上限扣除今天已出现的新词', () => {
@@ -108,4 +110,14 @@ test('newCard: 没有 crypto.randomUUID（局域网 http）时仍能生成不重
   } finally {
     Object.defineProperty(globalThis, 'crypto', desc);
   }
+});
+
+test('pickSession: 新词优先从最近导入的批次选，批内保持导入顺序', () => {
+  const mk = (id, batch, createdAt) => card({ id, batch, createdAt });
+  const cards = [
+    mk('old1', 'L7', 100), mk('old2', 'L7', 101),
+    mk('new2', 'L8', 201), mk('new1', 'L8', 200),
+  ];
+  const ids = pickSession(cards, NOW, { sessionSize: 3, newPerDay: 5 }).map((x) => x.id);
+  assert.deepEqual(ids, ['new1', 'new2', 'old1']);
 });
