@@ -1,6 +1,6 @@
 import { h, mount } from './dom.js';
 import { getSettings, saveSettings, exportBackup, importBackup } from '../data/store.js';
-import { speak, hasEnglishVoice } from '../platform/speech.js';
+import { speak, speakChinese, hasEnglishVoice, hasChineseVoice } from '../platform/speech.js';
 
 // 去服务器取最新的 version.js。带上时间戳参数，绕过 Service Worker 里缓存的那份。
 async function fetchLatestVersion() {
@@ -71,6 +71,10 @@ export async function render(root, { navigate }) {
     if (!hasEnglishVoice()) { msg.textContent = '没有找到英文语音：到 iPad 设置 → 辅助功能 → 朗读内容 → 声音 → 英语，下载一个语音。'; return; }
     speak('apple'); msg.textContent = '正在朗读 apple';
   };
+  const testChineseVoice = () => {
+    if (!hasChineseVoice()) { msg.textContent = '没有找到中文语音：到 iPad 设置 → 辅助功能 → 朗读内容 → 声音 → 中文，下载一个语音。'; return; }
+    speakChinese('苹果'); msg.textContent = '正在朗读 苹果';
+  };
   const doExport = async () => {
     const backup = await exportBackup();
     const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
@@ -88,7 +92,10 @@ export async function render(root, { navigate }) {
     h('h1', {}, '设置'),
     h('div', { class: 'card' }, h('h2', {}, '每轮词数'), size, h('h2', {}, '每天新词上限'), newPer,
       h('div', { class: 'row' }, h('button', { onclick: save }, '保存'))),
-    h('div', { class: 'card' }, h('h2', {}, '发音'), h('button', { class: 'secondary', onclick: testVoice }, '🔊 测试发音')),
+    h('div', { class: 'card' }, h('h2', {}, '发音'),
+      h('div', { class: 'row' },
+        h('button', { class: 'secondary', onclick: testVoice }, '🔊 测试英文发音'),
+        h('button', { class: 'secondary', onclick: testChineseVoice }, '🔊 测试中文发音'))),
     h('div', { class: 'card' }, h('h2', {}, '备份'),
       h('div', { class: 'row' }, h('button', { class: 'secondary', onclick: doExport }, '导出备份'), h('button', { class: 'secondary', onclick: () => fileInput.click() }, '导入备份')), fileInput),
     msg,

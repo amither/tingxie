@@ -2,7 +2,7 @@ import { h, mount } from './dom.js';
 import { getAllCards, getSettings, putCards } from '../data/store.js';
 import { pickSession, pickPractice, isNew, gradeCorrect, markWrong, markRetryCorrect } from '../core/scheduler.js';
 import { createSession, currentId, answer, isFinished, stats } from '../core/session.js';
-import { speak } from '../platform/speech.js';
+import { speak, speakChinese } from '../platform/speech.js';
 
 const normalize = (s) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -66,7 +66,8 @@ export async function render(root, { navigate }) {
     const { done, total } = stats(session);
     mount(root,
       h('div', { class: 'progress' }, `${practice ? '额外练习 · ' : ''}${Math.min(done + 1, total)} / ${total}`),
-      h('div', { class: 'zh' }, card.zh),
+      h('div', { class: 'zh' }, card.zh,
+        h('button', { class: 'secondary small speaker', 'aria-label': '听中文发音', onclick: () => speakChinese(card.zh) }, '🔊')),
       h('div', { class: 'row' }, h('button', { class: 'secondary small', onclick: () => speak(card.en) }, '🔊 听发音')),
       input, feedback, submit,
       h('button', { class: 'secondary small', onclick: () => navigate('home') }, '退出'),

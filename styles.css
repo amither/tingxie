@@ -25,3 +25,4 @@ td, th { padding: 6px; border-bottom: 1px solid #f3f4f6; text-align: left; font-
 input[type=text], input[type=number], select { font-size: 22px; padding: 8px 10px; border: 2px solid #e5e7eb; border-radius: 10px; width: 100%; }
 tr.flag td { background: #fef2f2; }
 tr.dup td { background: #fffbeb; }
+.zh .speaker { font-size: 28px; padding: 6px 14px; margin-left: 16px; vertical-align: middle; }
