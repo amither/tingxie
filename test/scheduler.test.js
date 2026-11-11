@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   INTERVAL_DAYS, newCard, isNew, gradeCorrect, markWrong, markRetryCorrect,
-  pickSession, summary,
+  pickSession, pickPractice, summary,
 } from '../src/core/scheduler.js';
 
 const NOW = new Date(2026, 10, 10, 15, 30); // 2026-11-10 15:30 本地时间
@@ -120,4 +120,25 @@ test('pickSession: 新词优先从最近导入的批次选，批内保持导入�
   ];
   const ids = pickSession(cards, NOW, { sessionSize: 3, newPerDay: 5 }).map((x) => x.id);
   assert.deepEqual(ids, ['new1', 'new2', 'old1']);
+});
+
+test('pickPractice: 只练学过的词，盒子低的优先，同盒子按到期时间', () => {
+  const a = seen({ id: 'a', box: 3, dueAt: day(5) });
+  const b = seen({ id: 'b', box: 1, dueAt: day(4) });
+  const c = seen({ id: 'c', box: 1, dueAt: day(2) });
+  const fresh = card({ id: 'new' });
+  const ids = pickPractice([a, b, c, fresh], 10).map((x) => x.id);
+  assert.deepEqual(ids, ['c', 'b', 'a']);
+});
+
+test('pickPractice: 受 size 限制；排除的词排到后面，名额不够时才补', () => {
+  const cards = ['a', 'b', 'c', 'd'].map((id, i) => seen({ id, box: 1, dueAt: day(i + 1) }));
+  assert.deepEqual(pickPractice(cards, 2).map((x) => x.id), ['a', 'b']);
+  assert.deepEqual(pickPractice(cards, 2, new Set(['a', 'b'])).map((x) => x.id), ['c', 'd']);
+  assert.deepEqual(pickPractice(cards, 3, new Set(['a', 'b', 'c'])).map((x) => x.id), ['d', 'a', 'b']);
+});
+
+test('pickPractice: 没有学过的词返回空数组', () => {
+  assert.deepEqual(pickPractice([card({ id: 'n' })], 10), []);
+  assert.deepEqual(pickPractice([], 10), []);
 });

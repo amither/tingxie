@@ -69,6 +69,17 @@ export function pickSession(cards, now, { sessionSize, newPerDay }) {
   return fresh.concat(due);
 }
 
+// 今天的任务做完后的“额外练习”：只练学过的词，最容易忘的优先（盒子低、到期早）。
+// exclude 里是已经练过的词，排到后面；名额不够时才补回来。
+export function pickPractice(cards, size, exclude = new Set()) {
+  const learned = cards
+    .filter((c) => !isNew(c))
+    .sort((a, b) => a.box - b.box || a.dueAt - b.dueAt);
+  const fresh = learned.filter((c) => !exclude.has(c.id));
+  const repeats = learned.filter((c) => exclude.has(c.id));
+  return fresh.concat(repeats).slice(0, size);
+}
+
 export function summary(cards, now, { newPerDay }) {
   const t = now.getTime();
   const due = cards.filter((c) => !isNew(c) && c.dueAt <= t).length;

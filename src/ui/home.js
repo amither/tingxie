@@ -1,6 +1,6 @@
 import { h, mount } from './dom.js';
 import { getAllCards, getSettings, getLastBackupAt } from '../data/store.js';
-import { summary } from '../core/scheduler.js';
+import { summary, isNew } from '../core/scheduler.js';
 
 const DAY = 86400000;
 
@@ -15,9 +15,11 @@ export async function render(root, { navigate }) {
       h('button', { class: 'big', onclick: () => navigate('import') }, '导入单词'));
   } else {
     const nothing = due + newAvail === 0;
+    const canPractice = cards.some((c) => !isNew(c)); // 今天做完后还能再练学过的词
     nodes.push(
       h('div', { class: 'card' }, `今天要复习 ${due} 个词，新词 ${newAvail} 个`),
-      h('button', { class: 'big', disabled: nothing, onclick: () => navigate('dictation') }, nothing ? '今天都完成啦 🎉' : '开始听写'),
+      h('button', { class: 'big', disabled: nothing && !canPractice, onclick: () => navigate('dictation') },
+        !nothing ? '开始听写' : canPractice ? '今天都完成啦 🎉 再练一轮' : '今天都完成啦 🎉'),
       h('div', { class: 'row' },
         h('button', { class: 'secondary', onclick: () => navigate('import') }, '导入单词'),
         h('button', { class: 'secondary', onclick: () => navigate('words') }, `词表（${cards.length}）`),
