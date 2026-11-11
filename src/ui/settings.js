@@ -11,9 +11,45 @@ async function fetchLatestVersion() {
   return m[1];
 }
 
+// 立即更新：1) 新版本已下载好但页面还没换上 → 直接重新加载；2) 去检查服务器上有没有新版本，装好后重新加载
+async function updateNow(say, current) {
+  const reg = await navigator.serviceWorker?.getRegistration();
+  if (!reg) { say('没有启用离线缓存，直接刷新页面…'); location.reload(); return; }
+
+  const cachedVersion = (await caches.keys()).find((k) => k.startsWith('tingxie-'))?.slice('tingxie-'.length);
+  if (cachedVersion && cachedVersion !== current) {
+    say(`新版本 ${cachedVersion} 已下载好，正在重新打开…`); location.reload(); return;
+  }
+
+  say('正在检查更新…');
+  await reg.update();
+  const worker = reg.installing ?? reg.waiting;
+  if (!worker) { say('没有发现新版本。如果刚刚发布过，请等几分钟再试。'); return; }
+
+  say('发现新版本，正在下载…');
+  await new Promise((resolve, reject) => {
+    const check = () => {
+      if (worker.state === 'activated') resolve();
+      else if (worker.state === 'redundant') reject(new Error('安装失败，请稍后再试'));
+    };
+    worker.addEventListener('statechange', check);
+    check();
+  });
+  say('更新完成，正在重新打开…');
+  location.reload();
+}
+
 export async function render(root, { navigate }) {
   const settings = await getSettings();
   const current = self.APP_VERSION ?? '未知';
+  const updateMsg = h('div', { class: 'muted' });
+  const updateBtn = h('button', { class: 'secondary' }, '🔄 检查并更新');
+  updateBtn.onclick = async () => {
+    updateBtn.disabled = true;
+    try { await updateNow((t) => { updateMsg.textContent = t; }, current); }
+    catch (e) { updateMsg.textContent = '更新失败：' + e.message; }
+    updateBtn.disabled = false;
+  };
   const latestLine = h('div', { class: 'muted' }, '正在检查最新版本…');
   fetchLatestVersion().then(
     (latest) => {
@@ -56,7 +92,8 @@ export async function render(root, { navigate }) {
     h('div', { class: 'card' }, h('h2', {}, '备份'),
       h('div', { class: 'row' }, h('button', { class: 'secondary', onclick: doExport }, '导出备份'), h('button', { class: 'secondary', onclick: () => fileInput.click() }, '导入备份')), fileInput),
     msg,
-    h('div', { class: 'card' }, h('h2', {}, '版本'), h('div', {}, `当前版本：${current}`), latestLine),
+    h('div', { class: 'card' }, h('h2', {}, '版本'), h('div', {}, `当前版本：${current}`), latestLine,
+      h('div', { class: 'row' }, updateBtn), updateMsg),
     h('button', { class: 'secondary', onclick: () => navigate('home') }, '返回'),
   );
 }

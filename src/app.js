@@ -27,4 +27,5 @@ async function render() {
 window.addEventListener('hashchange', render);
 requestPersistence();
 render();
-if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js');
+// updateViaCache: 'none'：检查更新时 sw.js 和它引入的 version.js 都绕过 HTTP 缓存
+if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
