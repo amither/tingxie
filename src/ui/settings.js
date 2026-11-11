@@ -2,8 +2,27 @@ import { h, mount } from './dom.js';
 import { getSettings, saveSettings, exportBackup, importBackup } from '../data/store.js';
 import { speak, hasEnglishVoice } from '../platform/speech.js';
 
+// 去服务器取最新的 version.js。带上时间戳参数，绕过 Service Worker 里缓存的那份。
+async function fetchLatestVersion() {
+  const res = await fetch(`version.js?check=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const m = /APP_VERSION\s*=\s*'([^']+)'/.exec(await res.text());
+  if (!m) throw new Error('读不出版本号');
+  return m[1];
+}
+
 export async function render(root, { navigate }) {
   const settings = await getSettings();
+  const current = self.APP_VERSION ?? '未知';
+  const latestLine = h('div', { class: 'muted' }, '正在检查最新版本…');
+  fetchLatestVersion().then(
+    (latest) => {
+      latestLine.textContent = latest === current
+        ? '已是最新版本 ✓'
+        : `服务器上有新版本 ${latest}：请完全关闭应用后重新打开（必要时重复一次）`;
+    },
+    () => { latestLine.textContent = '无法检查最新版本（可能没有网络）'; },
+  );
   const size = h('select', {}, ...[5, 10, 20].map((n) => h('option', { value: n, selected: n === settings.sessionSize }, `${n} 个`)));
   const newPer = h('input', { type: 'number', min: 0, max: 100, value: settings.newPerDay });
   const msg = h('div', { class: 'muted' });
@@ -37,6 +56,7 @@ export async function render(root, { navigate }) {
     h('div', { class: 'card' }, h('h2', {}, '备份'),
       h('div', { class: 'row' }, h('button', { class: 'secondary', onclick: doExport }, '导出备份'), h('button', { class: 'secondary', onclick: () => fileInput.click() }, '导入备份')), fileInput),
     msg,
+    h('div', { class: 'card' }, h('h2', {}, '版本'), h('div', {}, `当前版本：${current}`), latestLine),
     h('button', { class: 'secondary', onclick: () => navigate('home') }, '返回'),
   );
 }

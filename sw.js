@@ -1,6 +1,7 @@
-const CACHE = 'tingxie-v4'; // 改动任何文件后把版本号 +1，旧缓存会在 activate 时清掉
+importScripts('version.js'); // 定义 self.APP_VERSION；它的内容变化也会触发 Service Worker 更新
+const CACHE = 'tingxie-' + self.APP_VERSION; // 旧版本的缓存会在 activate 时清掉
 const CORE = [
-  './', 'index.html', 'styles.css', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'manifest.webmanifest', 'version.js',
   'src/app.js', 'src/core/scheduler.js', 'src/core/parser.js', 'src/core/session.js',
   'src/data/store.js', 'src/platform/speech.js', 'src/platform/importer.js',
   'src/ui/dom.js', 'src/ui/home.js', 'src/ui/dictation.js', 'src/ui/import.js', 'src/ui/words.js', 'src/ui/settings.js',
