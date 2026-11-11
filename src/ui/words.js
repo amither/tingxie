@@ -13,6 +13,8 @@ export async function render(root, { navigate }) {
   const now = Date.now();
   const batches = new Map();
   for (const c of cards.sort((a, b) => a.createdAt - b.createdAt)) (batches.get(c.batch) ?? batches.set(c.batch, []).get(c.batch)).push(c);
+  // 最近导入的批次排在最上面；list 已按 createdAt 升序，末尾那个就是该批次最近导入的词
+  const newestFirst = [...batches.entries()].sort((a, b) => b[1].at(-1).createdAt - a[1].at(-1).createdAt);
 
   const reload = () => render(root, { navigate });
   const edit = async (c) => {
@@ -23,7 +25,7 @@ export async function render(root, { navigate }) {
 
   mount(root,
     h('h1', {}, `词表（${cards.length}）`),
-    ...[...batches.entries()].map(([batch, list]) => h('div', { class: 'card' },
+    ...newestFirst.map(([batch, list]) => h('div', { class: 'card' },
       h('h2', {}, `${batch}（${list.length}）`),
       h('table', {}, ...list.map((c) => h('tr', {},
         h('td', {}, c.en), h('td', {}, c.zh),
