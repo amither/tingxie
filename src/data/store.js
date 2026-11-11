@@ -40,11 +40,10 @@ export async function getSettings() {
 export const saveSettings = (settings) => setMeta('settings', settings);
 export const getLastBackupAt = () => getMeta('lastBackupAt');
 
-export async function exportBackup() {
-  const backup = { app: 'tingxie', version: 1, exportedAt: Date.now(), settings: await getSettings(), cards: await getAllCards() };
-  await setMeta('lastBackupAt', backup.exportedAt);
-  return backup;
+export async function buildBackup() {
+  return { app: 'tingxie', version: 1, exportedAt: Date.now(), settings: await getSettings(), cards: await getAllCards() };
 }
+export const markBackedUp = (at) => setMeta('lastBackupAt', at);
 
 export async function importBackup(backup) {
   if (backup?.app !== 'tingxie' || !Array.isArray(backup.cards)) throw new Error('不是有效的备份文件');

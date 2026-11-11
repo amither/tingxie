@@ -27,7 +27,7 @@ export async function render(root, { navigate }) {
     );
     const days = lastBackupAt ? Math.floor((now - lastBackupAt) / DAY) : null;
     if (days === null || days >= 14) {
-      nodes.push(h('div', { class: 'notice' }, days === null ? '还没有备份过，建议到设置里导出一份。' : `上次备份是 ${days} 天前，建议到设置里再导出一份。`));
+      nodes.push(h('div', { class: 'notice' }, days === null ? '还没有备份过，建议到设置里备份到 iCloud。' : `上次备份是 ${days} 天前，建议到设置里再备份到 iCloud。`));
     }
   }
   mount(root, ...nodes);

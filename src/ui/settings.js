@@ -1,5 +1,5 @@
 import { h, mount } from './dom.js';
-import { getSettings, saveSettings, exportBackup, importBackup } from '../data/store.js';
+import { getSettings, saveSettings, buildBackup, markBackedUp, importBackup } from '../data/store.js';
 import { speak, speakChinese, hasEnglishVoice, hasChineseVoice } from '../platform/speech.js';
 
 // 去服务器取最新的 version.js。带上时间戳参数，绕过 Service Worker 里缓存的那份。
@@ -75,17 +75,44 @@ export async function render(root, { navigate }) {
     if (!hasChineseVoice()) { msg.textContent = '没有找到中文语音：到 iPad 设置 → 辅助功能 → 朗读内容 → 声音 → 中文，下载一个语音。'; return; }
     speakChinese('苹果'); msg.textContent = '正在朗读 苹果';
   };
-  const doExport = async () => {
-    const backup = await exportBackup();
-    const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
-    const a = h('a', { href: url, download: `tingxie-backup-${new Date().toISOString().slice(0, 10)}.json` });
+  // Safari 要求 navigator.share 必须紧跟在点击里调用，中间不能 await 别的异步操作，
+  // 所以备份文件在页面打开（和导入完成）时就先准备好
+  let prepared;
+  const prepare = async () => {
+    const backup = await buildBackup();
+    const name = `tingxie-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    prepared = { backup, file: new File([JSON.stringify(backup)], name, { type: 'application/json' }) };
+  };
+  await prepare();
+
+  const downloadFile = (file) => {
+    const url = URL.createObjectURL(file);
+    const a = h('a', { href: url, download: file.name });
     document.body.append(a); a.click(); a.remove();
-    msg.textContent = `已导出 ${backup.cards.length} 个词`;
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+  const doBackup = async () => {
+    const { backup, file } = prepared;
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: '听写备份' });
+        msg.textContent = `已备份 ${backup.cards.length} 个词。请确认你在分享面板里选了“存储到文件”→“iCloud 云盘”。`;
+      } else {
+        downloadFile(file);
+        msg.textContent = `已下载 ${backup.cards.length} 个词的备份文件，请到“文件”App 里把它移到 iCloud 云盘。`;
+      }
+      await markBackedUp(backup.exportedAt);
+    } catch (e) {
+      msg.textContent = e.name === 'AbortError' ? '已取消备份' : '备份失败：' + e.message;
+    }
   };
   const fileInput = h('input', { type: 'file', accept: 'application/json,.json', hidden: true });
   fileInput.addEventListener('change', async () => {
-    try { msg.textContent = `已导入 ${await importBackup(JSON.parse(await fileInput.files[0].text()))} 个词`; }
-    catch (e) { msg.textContent = '导入失败：' + e.message; }
+    try {
+      msg.textContent = `已导入 ${await importBackup(JSON.parse(await fileInput.files[0].text()))} 个词`;
+      await prepare();
+    } catch (e) { msg.textContent = '导入失败：' + e.message; }
+    fileInput.value = ''; // 允许再次选择同一个文件
   });
 
   mount(root,
@@ -96,8 +123,11 @@ export async function render(root, { navigate }) {
       h('div', { class: 'row' },
         h('button', { class: 'secondary', onclick: testVoice }, '🔊 测试英文发音'),
         h('button', { class: 'secondary', onclick: testChineseVoice }, '🔊 测试中文发音'))),
-    h('div', { class: 'card' }, h('h2', {}, '备份'),
-      h('div', { class: 'row' }, h('button', { class: 'secondary', onclick: doExport }, '导出备份'), h('button', { class: 'secondary', onclick: () => fileInput.click() }, '导入备份')), fileInput),
+    h('div', { class: 'card' }, h('h2', {}, '备份到 iCloud'),
+      h('div', { class: 'muted' }, '点“备份”后在弹出的面板里选“存储到文件”，再选“iCloud 云盘”。换机器时，点“从 iCloud 导入”，到 iCloud 云盘里选这个备份文件。'),
+      h('div', { class: 'row' },
+        h('button', { onclick: doBackup }, '☁️ 备份'),
+        h('button', { class: 'secondary', onclick: () => fileInput.click() }, '从 iCloud 导入')), fileInput),
     msg,
     h('div', { class: 'card' }, h('h2', {}, '版本'), h('div', {}, `当前版本：${current}`), latestLine,
       h('div', { class: 'row' }, updateBtn), updateMsg),
