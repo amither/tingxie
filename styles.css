@@ -36,3 +36,9 @@ tr.dup td { background: #fffbeb; }
 .answer-row .answer { flex: 1; min-width: 0; width: auto; }
 .answer-row .submit { font-size: 32px; padding: 0 32px; white-space: nowrap; }
 .feedback { margin: 12px 0; }
+/* 词表页：勾选今天要听写的词 */
+input[type=checkbox] { width: 28px; height: 28px; accent-color: var(--main); vertical-align: middle; }
+td.pick { width: 44px; }
+.batch-title { display: flex; align-items: center; gap: 12px; }
+.selbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; padding: 12px 0; background: var(--bg); }
+.selbar button:first-child { flex: 1; }

@@ -3,6 +3,7 @@ import { getAllCards, getSettings, putCards } from '../data/store.js';
 import { pickSession, pickPractice, isNew, gradeCorrect, markWrong, markRetryCorrect } from '../core/scheduler.js';
 import { createSession, currentId, answer, isFinished, stats } from '../core/session.js';
 import { speak, speakChinese } from '../platform/speech.js';
+import { takePicked, setPicked } from './selection.js';
 
 const normalize = (s) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -11,14 +12,27 @@ const practiced = new Set();
 
 export async function render(root, { navigate }) {
   const [cards, settings] = await Promise.all([getAllCards(), getSettings()]);
-  let picked = pickSession(cards, new Date(), settings);
-  const practice = picked.length === 0; // 今天的任务都做完了：额外练习
+  const now0 = Date.now();
+  const chosen = takePicked(); // 词表页勾选的词；有的话按勾选的听写
+  const custom = chosen !== null;
+  let picked;
+  if (custom) {
+    const want = new Set(chosen);
+    picked = cards.filter((c) => want.has(c.id));
+  } else {
+    picked = pickSession(cards, new Date(), settings);
+  }
+  const practice = !custom && picked.length === 0; // 今天的任务都做完了：额外练习
   if (practice) {
     if (practiced.size >= cards.filter((c) => !isNew(c)).length) practiced.clear();
     picked = pickPractice(cards, settings.sessionSize, practiced);
     picked.forEach((c) => practiced.add(c.id));
   }
   if (picked.length === 0) { navigate('home'); return; }
+
+  // 是否影响复习计划：额外练习都不影响；自选时，没到期的词写对不影响（写错照常记录）
+  const affectsSchedule = (c) => !practice && (!custom || isNew(c) || c.dueAt <= now0);
+  const label = practice ? '额外练习 · ' : custom ? '自选 · ' : '';
 
   const byId = new Map(picked.map((c) => [c.id, c]));
   const session = createSession(picked.map((c) => c.id));
@@ -43,8 +57,8 @@ export async function render(root, { navigate }) {
       const ok = normalize(input.value) === normalize(card.en);
       const outcome = answer(session, ok);
       const now = new Date();
-      // 额外练习时，提前复习写对的词不改变它的复习计划；写错仍然照常记录
-      const updated = outcome === 'correct' ? (practice ? card : gradeCorrect(card, now))
+      // 提前复习写对的词不改变它的复习计划；写错仍然照常记录
+      const updated = outcome === 'correct' ? (affectsSchedule(card) ? gradeCorrect(card, now) : card)
         : outcome === 'retry-correct' ? markRetryCorrect(card, now)
         : outcome === 'wrong' ? markWrong(card, now) : card;
       byId.set(card.id, updated);
@@ -68,7 +82,7 @@ export async function render(root, { navigate }) {
     mount(root,
       h('div', { class: 'topbar' },
         h('button', { class: 'secondary small', onclick: () => navigate('home') }, '退出'),
-        h('div', { class: 'progress' }, `${practice ? '额外练习 · ' : ''}${Math.min(done + 1, total)} / ${total}`),
+        h('div', { class: 'progress' }, `${label}${Math.min(done + 1, total)} / ${total}`),
         h('span', { class: 'topbar-gap' })),
       h('div', { class: 'zh' }, card.zh,
         h('button', { class: 'secondary small speaker', 'aria-label': '听中文发音', onclick: () => speakChinese(card.zh) }, '🔊')),
@@ -83,12 +97,14 @@ export async function render(root, { navigate }) {
     const s = stats(session);
     const hard = s.struggled.map((id) => byId.get(id));
     mount(root,
-      h('h1', {}, practice ? '额外练习完成 🎉' : '本轮完成 🎉'),
+      h('h1', {}, practice ? '额外练习完成 🎉' : custom ? '自选听写完成 🎉' : '本轮完成 🎉'),
       h('div', { class: 'card' }, `一次写对 ${s.firstTryCorrect} / ${s.total}`),
       hard.length ? h('div', { class: 'card' }, h('h2', {}, '要多练的词'), ...hard.map((c) => h('div', {}, `${c.en}  ${c.zh}`))) : '',
       h('div', { class: 'row' },
-        // 已在 #/dictation，改变 hash 不会重新渲染，直接重新开一轮
-        h('button', { onclick: () => render(root, { navigate }) }, '再来一轮'),
+        // 已在 #/dictation，改变 hash 不会重新渲染，直接重新开一轮；自选的重练同一批词
+        h('button', {
+          onclick: () => { if (custom) setPicked(chosen); render(root, { navigate }); },
+        }, custom ? '再练这些词' : '再来一轮'),
         h('button', { class: 'secondary', onclick: () => navigate('home') }, '回首页')),
     );
   }

@@ -4,7 +4,7 @@ const CORE = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest', 'version.js',
   'src/app.js', 'src/core/scheduler.js', 'src/core/parser.js', 'src/core/session.js',
   'src/data/store.js', 'src/platform/speech.js', 'src/platform/importer.js',
-  'src/ui/dom.js', 'src/ui/home.js', 'src/ui/dictation.js', 'src/ui/import.js', 'src/ui/words.js', 'src/ui/settings.js',
+  'src/ui/dom.js', 'src/ui/selection.js', 'src/ui/home.js', 'src/ui/dictation.js', 'src/ui/import.js', 'src/ui/words.js', 'src/ui/settings.js',
   'icons/icon-180.png', 'icons/icon-512.png',
 ];
 const VENDOR = [
