@@ -70,8 +70,9 @@ export async function render(root, { navigate }) {
   function showQuestion() {
     if (isFinished(session)) return showSummary();
     const card = byId.get(currentId(session));
+    const retry = session.failed.has(card.id); // 这个词刚写错过，现在是原地重试
     const widget = makeAnswerWidget(card.en);
-    const feedback = h('div', { class: 'feedback' }, notice);
+    const feedback = h('div', { class: 'feedback' }, notice || (retry ? '再写一次 ✍️' : ''));
     notice = '';
     const submit = h('button', { class: 'submit' }, '提交');
     const progressEl = h('div', { class: 'progress' });
@@ -90,7 +91,7 @@ export async function render(root, { navigate }) {
       // 提前复习写对的词不改变它的复习计划；写错仍然照常记录
       const updated = outcome === 'correct' ? (affectsSchedule(card) ? gradeCorrect(card, now) : card)
         : outcome === 'retry-correct' ? markRetryCorrect(card, now)
-        : outcome === 'wrong' ? markWrong(card, now) : card;
+        : markWrong(card, now); // wrong / wrong-again：每次写错都记一次
       byId.set(card.id, updated);
       if (updated !== card) await putCards([updated]);
 
