@@ -77,23 +77,6 @@ export async function render(root, { navigate }) {
     submit.onclick = onSubmit;
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') onSubmit(); });
 
-    // 拦截候选词：手写或打字都是一次多一个字母，点候选词会一次多出好几个字，直接撤销
-    let committed = '';
-    const guard = () => {
-      if (locked) return;
-      const v = input.value;
-      if (v.length - committed.length > 1) {
-        input.value = committed;
-        feedback.className = 'feedback';
-        feedback.textContent = '请自己一个字母一个字母地写哦';
-      } else {
-        committed = v;
-        if (feedback.textContent.startsWith('请自己')) feedback.textContent = '';
-      }
-    };
-    input.addEventListener('input', (e) => { if (!e.isComposing) guard(); }); // 输入法组字过程中先不判断
-    input.addEventListener('compositionend', () => setTimeout(guard, 0));
-
     // 键盘会盖住屏幕下半部分：提交按钮放在输入框右边，退出放到顶部，关键内容都留在上半屏
     const { done, total } = stats(session);
     mount(root,
