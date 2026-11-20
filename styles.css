@@ -42,3 +42,11 @@ td.pick { width: 44px; }
 .batch-title { display: flex; align-items: center; gap: 12px; }
 .selbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; padding: 12px 0; background: var(--bg); }
 .selbar button:first-child { flex: 1; }
+/* 听写页：手写板 */
+.pad-cells { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0 4px;
+             -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.pad-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pad-cell canvas.pad { width: 84px; height: 112px; background: #fff; border: 2px solid #e5e7eb; border-radius: 10px; touch-action: none; }
+.pad-guess { font-size: 28px; font-weight: 600; height: 34px; color: #2563eb; }
+.pad-clear { font-size: 14px; padding: 2px 10px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; color: #6b7280; }
+.pad-cells.locked { opacity: .6; }

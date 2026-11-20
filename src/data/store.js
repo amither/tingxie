@@ -1,6 +1,7 @@
 const DB_NAME = 'tingxie';
 const DB_VERSION = 1;
-export const DEFAULT_SETTINGS = { sessionSize: 10, newPerDay: 5 };
+// inputMode：'pad' 应用自带的手写板（自己识别）；'keyboard' 输入框 + iPad 系统手写输入法
+export const DEFAULT_SETTINGS = { sessionSize: 10, newPerDay: 5, inputMode: 'pad' };
 
 let dbPromise;
 function db() {
@@ -37,7 +38,8 @@ const setMeta = (key, value) => run('meta', 'readwrite', (s) => { s.put(value, k
 export async function getSettings() {
   return { ...DEFAULT_SETTINGS, ...((await getMeta('settings')) ?? {}) };
 }
-export const saveSettings = (settings) => setMeta('settings', settings);
+// 只改传入的字段，其余设置保持不变
+export const saveSettings = async (patch) => setMeta('settings', { ...(await getSettings()), ...patch });
 export const getLastBackupAt = () => getMeta('lastBackupAt');
 
 export async function buildBackup() {

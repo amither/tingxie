@@ -1,0 +1,87 @@
+{
+ "classes": "abcdefghijklmnopqrstuvwxyz",
+ "size": 28,
+ "tensors": [
+  {
+   "name": "conv1.w",
+   "shape": [
+    16,
+    1,
+    3,
+    3
+   ],
+   "offset": 0
+  },
+  {
+   "name": "conv1.b",
+   "shape": [
+    16
+   ],
+   "offset": 144
+  },
+  {
+   "name": "conv2.w",
+   "shape": [
+    32,
+    16,
+    3,
+    3
+   ],
+   "offset": 160
+  },
+  {
+   "name": "conv2.b",
+   "shape": [
+    32
+   ],
+   "offset": 4768
+  },
+  {
+   "name": "conv3.w",
+   "shape": [
+    64,
+    32,
+    3,
+    3
+   ],
+   "offset": 4800
+  },
+  {
+   "name": "conv3.b",
+   "shape": [
+    64
+   ],
+   "offset": 23232
+  },
+  {
+   "name": "fc1.w",
+   "shape": [
+    128,
+    576
+   ],
+   "offset": 23296
+  },
+  {
+   "name": "fc1.b",
+   "shape": [
+    128
+   ],
+   "offset": 97024
+  },
+  {
+   "name": "fc2.w",
+   "shape": [
+    26,
+    128
+   ],
+   "offset": 97152
+  },
+  {
+   "name": "fc2.b",
+   "shape": [
+    26
+   ],
+   "offset": 100480
+  }
+ ]
+}

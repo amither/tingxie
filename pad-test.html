@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>手写识别测试</title>
+<style>
+  :root { --main: #f59e0b; --ok: #16a34a; --bad: #dc2626; --bg: #fffbea; --ink: #1f2937; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px; font-family: -apple-system, "PingFang SC", sans-serif; background: var(--bg); color: var(--ink);
+         -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  .target { font-size: 44px; text-align: center; letter-spacing: 6px; margin: 8px 0 16px; min-height: 52px; }
+  .cells { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .cell canvas.pad { width: 92px; height: 124px; background: #fff; border: 2px solid #e5e7eb; border-radius: 10px; touch-action: none; }
+  .cell .guess { font-size: 34px; height: 40px; font-weight: 600; }
+  .cell .guess.ok { color: var(--ok); } .cell .guess.bad { color: var(--bad); }
+  .cell .top { font-size: 12px; color: #6b7280; height: 16px; white-space: nowrap; }
+  .cell canvas.dbg { width: 56px; height: 56px; image-rendering: pixelated; border: 1px solid #ddd; display: none; }
+  body.debug .cell canvas.dbg { display: block; }
+  .cell button { font-size: 14px; padding: 2px 10px; border-radius: 6px; border: 1px solid #e5e7eb; background: #fff; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 16px 0; }
+  .bar button { font-size: 20px; padding: 10px 18px; border: 0; border-radius: 12px; background: var(--main); color: #fff; }
+  .bar button.secondary { background: #fff; color: var(--ink); border: 2px solid #e5e7eb; }
+  .result { text-align: center; font-size: 22px; margin: 8px 0; }
+  .stats { background: #fff; border-radius: 12px; padding: 12px 16px; font-size: 16px; line-height: 1.6; }
+  .muted { color: #6b7280; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>手写识别测试</h1>
+<div class="muted">照着上面的单词，一个格子写一个小写字母。写完一个词点「记下，换下一个」。</div>
+<div class="target" id="target"></div>
+<div class="cells" id="cells"></div>
+<div class="result" id="result"></div>
+<div class="bar">
+  <button id="next">记下，换下一个</button>
+  <button class="secondary" id="undo">撤销一笔</button>
+  <button class="secondary" id="clear">全部清空</button>
+  <button class="secondary" id="free">自由写</button>
+  <button class="secondary" id="debug">调试图</button>
+</div>
+<div class="stats" id="stats">正在加载识别模型…</div>
+
+<script type="module">
+import { createRecognizer } from './src/platform/letters.js';
+
+const WORDS = ['always', 'usually', 'sometimes', 'never', 'building', 'pencil', 'kite', 'alligator', 'knee', 'ear',
+  'hands', 'eyes', 'mouth', 'leg', 'foot', 'feet', 'tent', 'cloud', 'backpack', 'rope', 'painter', 'apartment'];
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+
+const [meta, bin] = await Promise.all([fetch('models/letters.json').then((r) => r.json()), fetch('models/letters.bin').then((r) => r.arrayBuffer())]);
+const rec = createRecognizer(meta, bin);
+
+let target = '';        // 空字符串表示自由写
+let cells = [];
+let lastCell = null;
+let penSeen = false;    // 用过 Apple Pencil 后忽略手指/手掌的触摸
+let wordIdx = 0;
+const stats = { letters: 0, correct: 0, words: 0, wordsCorrect: 0, confusions: new Map(), ms: [] };
+
+function makeCell() {
+  const wrap = el('div', 'cell');
+  const pad = el('canvas', 'pad');
+  const guess = el('div', 'guess');
+  const top = el('div', 'top');
+  const dbg = el('canvas', 'dbg'); dbg.width = dbg.height = 28;
+  const clr = el('button'); clr.textContent = '✕ 擦掉';
+  wrap.append(pad, guess, top, dbg, clr);
+  const cell = { wrap, pad, guess, top, dbg, strokes: [], letter: '' };
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = 92, H = 124;
+  pad.width = W * dpr; pad.height = H * dpr;
+  const ctx = pad.getContext('2d');
+  ctx.scale(dpr, dpr);
+  cell.redraw = () => {
+    ctx.clearRect(0, 0, W, H);
+    // 四线三格
+    [0.18, 0.4, 0.62, 0.84].forEach((f, k) => {
+      ctx.strokeStyle = k === 2 ? '#fca5a5' : '#cbd5e1'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(4, H * f); ctx.lineTo(W - 4, H * f); ctx.stroke();
+    });
+    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const s of cell.strokes) {
+      ctx.beginPath(); ctx.moveTo(...s[0]);
+      for (const p of s.length > 1 ? s.slice(1) : [s[0]]) ctx.lineTo(...p);
+      ctx.stroke();
+    }
+  };
+  cell.redraw();
+
+  let active = null, current = null;
+  const point = (e) => { const r = pad.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  pad.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'pen') penSeen = true;
+    else if (e.pointerType === 'touch' && penSeen) return;
+    if (active !== null) return;
+    e.preventDefault();
+    active = e.pointerId; pad.setPointerCapture(e.pointerId);
+    current = [point(e)]; cell.strokes.push(current); lastCell = cell;
+    cell.redraw();
+  });
+  pad.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== active) return;
+    for (const ev of e.getCoalescedEvents?.() ?? [e]) current.push(point(ev));
+    cell.redraw();
+  });
+  const end = (e) => { if (e.pointerId !== active) return; active = null; recognizeCell(cell); };
+  pad.addEventListener('pointerup', end);
+  pad.addEventListener('pointercancel', end);
+  clr.addEventListener('click', () => { cell.strokes = []; cell.redraw(); recognizeCell(cell); });
+  return cell;
+}
+
+function recognizeCell(cell) {
+  const H = 124;
+  const pts = cell.strokes.flat();
+  const ys = pts.map((p) => p[1]), xs = pts.map((p) => p[0]);
+  const extent = pts.length ? Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) : 0;
+  if (extent < H * 0.06) { // 没写，或只是不小心点了一下
+    cell.letter = ''; cell.guess.textContent = ''; cell.top.textContent = '';
+    cell.dbg.getContext('2d').clearRect(0, 0, 28, 28);
+  } else {
+    const t0 = performance.now();
+    const ranked = rec.recognize(cell.strokes, { minSize: H * 0.25 });
+    stats.ms.push(performance.now() - t0);
+    cell.letter = ranked[0].letter;
+    cell.guess.textContent = cell.letter;
+    cell.top.textContent = ranked.slice(0, 3).map((r) => `${r.letter} ${Math.round(r.p * 100)}%`).join(' · ');
+    const img = rec.rasterize(cell.strokes, { minSize: H * 0.25 });
+    const d = new ImageData(28, 28);
+    img.forEach((v, k) => { const g = 255 - Math.round(v * 255); d.data.set([g, g, g, 255], k * 4); });
+    cell.dbg.getContext('2d').putImageData(d, 0, 0);
+  }
+  showResult();
+}
+
+function showResult() {
+  const written = cells.map((c) => c.letter || '_').join('');
+  cells.forEach((c, i) => { c.guess.className = 'guess' + (target && c.letter ? (c.letter === target[i] ? ' ok' : ' bad') : ''); });
+  $('result').textContent = '认出：' + written + (target ? (written === target ? '  ✓ 全对' : '') : '');
+}
+
+function setup(word) {
+  target = word;
+  $('target').textContent = word || '（自由写）';
+  const n = word ? word.length : 8;
+  cells = Array.from({ length: n }, makeCell);
+  $('cells').replaceChildren(...cells.map((c) => c.wrap));
+  lastCell = null;
+  showResult();
+}
+
+function renderStats() {
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '-');
+  const conf = [...stats.confusions].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ×${v}`).join('，') || '无';
+  const ms = stats.ms.length ? Math.round(stats.ms.reduce((a, b) => a + b, 0) / stats.ms.length) : '-';
+  $('stats').innerHTML = `累计：${stats.words} 个词，全对 ${stats.wordsCorrect} 个（${pct(stats.wordsCorrect, stats.words)}）；`
+    + `字母 ${stats.letters} 个，认对 ${stats.correct} 个（${pct(stats.correct, stats.letters)}）<br>`
+    + `认错的（写的→认成）：${conf}<br><span class="muted">平均识别耗时 ${ms} ms</span>`;
+}
+
+$('next').onclick = () => {
+  if (target) {
+    let allOk = true;
+    cells.forEach((c, i) => {
+      if (!c.letter) { allOk = false; return; } // 没写的格子不计入字母统计
+      stats.letters++;
+      if (c.letter === target[i]) stats.correct++;
+      else { allOk = false; const k = `${target[i]}→${c.letter}`; stats.confusions.set(k, (stats.confusions.get(k) ?? 0) + 1); }
+    });
+    stats.words++; if (allOk) stats.wordsCorrect++;
+    renderStats();
+  }
+  wordIdx = (wordIdx + 1) % WORDS.length;
+  setup(WORDS[wordIdx]);
+};
+$('undo').onclick = () => { if (lastCell?.strokes.length) { lastCell.strokes.pop(); lastCell.redraw(); recognizeCell(lastCell); } };
+$('clear').onclick = () => setup(target);
+$('free').onclick = () => setup(target ? '' : WORDS[wordIdx]);
+$('debug').onclick = () => { document.body.classList.toggle('debug'); renderStats(); };
+
+setup(WORDS[0]);
+renderStats();
+</script>
+</body>
+</html>

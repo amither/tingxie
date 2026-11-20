@@ -62,6 +62,13 @@ export async function render(root, { navigate }) {
   const size = h('select', {}, ...[5, 10, 20].map((n) => h('option', { value: n, selected: n === settings.sessionSize }, `${n} 个`)));
   const newPer = h('input', { type: 'number', min: 0, max: 100, value: settings.newPerDay });
   const msg = h('div', { class: 'muted' });
+  const modeSel = h('select', {},
+    h('option', { value: 'pad', selected: settings.inputMode === 'pad' }, '✍️ 手写板（应用自己识别，没有候选词）'),
+    h('option', { value: 'keyboard', selected: settings.inputMode === 'keyboard' }, '⌨️ 输入框（用 iPad 的手写输入法）'));
+  modeSel.addEventListener('change', async () => {
+    await saveSettings({ inputMode: modeSel.value });
+    msg.textContent = '输入方式已保存';
+  });
 
   const save = async () => {
     await saveSettings({ sessionSize: Number(size.value), newPerDay: Math.max(0, Number(newPer.value) || 0) });
@@ -119,6 +126,8 @@ export async function render(root, { navigate }) {
     h('h1', {}, '设置'),
     h('div', { class: 'card' }, h('h2', {}, '每轮词数'), size, h('h2', {}, '每天新词上限'), newPer,
       h('div', { class: 'row' }, h('button', { onclick: save }, '保存'))),
+    h('div', { class: 'card' }, h('h2', {}, '听写输入方式'), modeSel,
+      h('div', { class: 'muted' }, '听写时也可以点右上角的按钮随时切换。')),
     h('div', { class: 'card' }, h('h2', {}, '发音'),
       h('div', { class: 'row' },
         h('button', { class: 'secondary', onclick: testVoice }, '🔊 测试英文发音'),
