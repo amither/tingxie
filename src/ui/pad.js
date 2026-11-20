@@ -1,12 +1,16 @@
-// 手写板：一格写一个字母，写完一笔就识别。起始几个格子，写到最后一格时自动加一格（不泄露单词长度）
+// 手写板：按单词的字母个数 + 3 固定格数，一格写一个字母，写完一笔就识别
 import { h } from './dom.js';
 import { createRecognizer } from '../platform/letters.js';
 import { assembleCells } from '../core/assemble.js';
 
 const CELL_W = 84;
 const CELL_H = 112;
-const START_CELLS = 6;
-const MAX_CELLS = 20;
+const EXTRA_CELLS = 3; // 留出短语里的空格和写错时的余量
+
+// 只数字母；短语的空格也要占一格，所以留 EXTRA_CELLS 个余量
+export function cellCount(word) {
+  return (word.match(/[a-z]/gi) ?? []).length + EXTRA_CELLS;
+}
 
 let recognizerPromise = null;
 export function loadRecognizer() {
@@ -22,7 +26,7 @@ export function loadRecognizer() {
 
 let penSeen = false; // 用过 Apple Pencil 后忽略手指/手掌的触摸
 
-export function createPad(recognizer) {
+export function createPad(recognizer, word) {
   const el = h('div', { class: 'pad-cells' });
   const cells = [];
   let lastCell = null;
@@ -35,7 +39,6 @@ export function createPad(recognizer) {
     // 没写，或只是不小心点了一下，都当空格子
     cell.letter = extent < CELL_H * 0.06 ? '' : recognizer.recognize(cell.strokes, { minSize: CELL_H * 0.25 })[0].letter;
     cell.guess.textContent = cell.letter;
-    if (cell.letter && cell === cells.at(-1) && cells.length < MAX_CELLS) addCell();
   }
 
   function addCell() {
@@ -89,7 +92,7 @@ export function createPad(recognizer) {
     el.append(cell.wrap);
   }
 
-  for (let i = 0; i < START_CELLS; i++) addCell();
+  for (let i = 0; i < cellCount(word ?? ''); i++) addCell();
 
   return {
     el,

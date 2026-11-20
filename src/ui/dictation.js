@@ -50,9 +50,9 @@ export async function render(root, { navigate }) {
   await ensureMode();
 
   // pad：手写板；否则：输入框。都提供 value / lock / focus
-  function makeAnswerWidget() {
+  function makeAnswerWidget(word) {
     if (mode === 'pad') {
-      const pad = createPad(recognizer);
+      const pad = createPad(recognizer, word);
       return {
         nodes: [pad.el, h('div', { class: 'row center' },
           h('button', { class: 'secondary small', onclick: () => pad.undo() }, '↩︎ 撤销一笔'),
@@ -70,7 +70,7 @@ export async function render(root, { navigate }) {
   function showQuestion() {
     if (isFinished(session)) return showSummary();
     const card = byId.get(currentId(session));
-    const widget = makeAnswerWidget();
+    const widget = makeAnswerWidget(card.en);
     const feedback = h('div', { class: 'feedback' }, notice);
     notice = '';
     const submit = h('button', { class: 'submit' }, '提交');
