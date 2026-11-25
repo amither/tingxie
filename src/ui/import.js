@@ -1,8 +1,7 @@
 import { h, mount } from './dom.js';
 import { getAllCards, putCards } from '../data/store.js';
 import { newCard } from '../core/scheduler.js';
-import { parseText } from '../core/parser.js';
-import { extractText } from '../platform/importer.js';
+import { extractEntries } from '../platform/importer.js';
 
 const defaultBatch = (file) => (file?.name ?? '').replace(/\.[^.]+$/, '') || new Date().toISOString().slice(0, 10);
 
@@ -15,8 +14,7 @@ export async function render(root, { navigate }) {
       if (!file) return;
       try {
         status.textContent = '处理中，请稍候…';
-        const text = await extractText(file, (msg) => { status.textContent = msg; });
-        const { entries, unrecognized } = parseText(text);
+        const { entries, unrecognized } = await extractEntries(file, (msg) => { status.textContent = msg; });
         if (!entries.length && !unrecognized.length) { status.textContent = '没识别出内容，可以换一张更清晰的照片，或手动添加。'; return; }
         await showReview(root, navigate, entries, unrecognized, defaultBatch(file));
       } catch (e) {
@@ -43,7 +41,8 @@ async function showReview(root, navigate, entries, unrecognized, batchDefault) {
   const existing = new Map((await getAllCards()).map((c) => [c.en.toLowerCase(), c]));
   const rows = [
     ...entries.map((e) => ({ en: e.en, zh: e.zh, flagged: false, onDup: 'skip' })),
-    ...unrecognized.map((line) => ({ en: line, zh: '', flagged: true, onDup: 'skip' })),
+    // 没认全的：整页识别时是一行文字（当英文），逐格识别时是 { en, zh }，缺哪边就让家长补哪边
+    ...unrecognized.map((u) => ({ ...(typeof u === 'string' ? { en: u, zh: '' } : u), flagged: true, onDup: 'skip' })),
   ];
   const batchInput = h('input', { type: 'text', value: batchDefault });
   const tbody = h('tbody');
@@ -51,7 +50,7 @@ async function showReview(root, navigate, entries, unrecognized, batchDefault) {
   function draw() {
     tbody.replaceChildren(...rows.map((r, i) => {
       const dup = existing.get(r.en.trim().toLowerCase());
-      const en = h('input', { type: 'text', value: r.en, autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' });
+      const en = h('input', { type: 'text', value: r.en, placeholder: r.flagged ? '请补英文' : '', autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' });
       en.addEventListener('input', () => { r.en = en.value; });
       en.addEventListener('change', draw); // 失焦后刷新重复提示
       const zh = h('input', { type: 'text', value: r.zh, placeholder: r.flagged ? '请补中文' : '' });
@@ -70,7 +69,7 @@ async function showReview(root, navigate, entries, unrecognized, batchDefault) {
   async function save() {
     const todo = rows.filter((r) => r.en.trim() || r.zh.trim());
     const incomplete = todo.filter((r) => !r.en.trim() || !r.zh.trim());
-    if (incomplete.length) { alert(`还有 ${incomplete.length} 行没填完整（红底是没识别出中文的行），请补全或删除。`); return; }
+    if (incomplete.length) { alert(`还有 ${incomplete.length} 行没填完整（红底是没识别全的行），请补全或删除。`); return; }
     const now = new Date();
     const batch = batchInput.value.trim() || batchDefault;
     const out = [];
@@ -98,7 +97,7 @@ async function showReview(root, navigate, entries, unrecognized, batchDefault) {
   draw();
   mount(root,
     h('h1', {}, '校对词表'),
-    h('div', { class: 'muted' }, '红底：没认出中文；黄底：和已有单词重复。确认无误后保存。'),
+    h('div', { class: 'muted' }, '红底：没认全，缺的英文或中文请补上；黄底：和已有单词重复。确认无误后保存。'),
     h('h2', {}, '批次名'), batchInput,
     h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, '英文'), h('th', {}, '中文'), h('th', {}), h('th', {}))), tbody),
     h('div', { class: 'row' },
