@@ -1,6 +1,7 @@
 import { h, mount } from './dom.js';
-import { getSettings, saveSettings, buildBackup, markBackedUp, importBackup } from '../data/store.js';
+import { getSettings, saveSettings, buildBackup, markBackedUp, importBackup, getDeepseekKey, setDeepseekKey } from '../data/store.js';
 import { speak, speakChinese, hasEnglishVoice, hasChineseVoice } from '../platform/speech.js';
+import { checkKey } from '../platform/deepseek.js';
 
 // 去服务器取最新的 version.js。带上时间戳参数，绕过 Service Worker 里缓存的那份。
 async function fetchLatestVersion() {
@@ -70,6 +71,26 @@ export async function render(root, { navigate }) {
     msg.textContent = '输入方式已保存';
   });
 
+  // DeepSeek 密钥：只存在这台设备上，不进备份文件
+  const keyInput = h('input', { type: 'password', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: 'sk-…' });
+  const keyState = h('div', { class: 'muted' });
+  const showKeyState = (key) => {
+    keyState.textContent = key ? `已设置（…${key.slice(-4)}）：拍照导入用 DeepSeek 识别` : '未设置：拍照导入用本机识别';
+  };
+  showKeyState(await getDeepseekKey());
+  const saveKey = async () => {
+    const key = keyInput.value.trim();
+    if (!key) { keyState.textContent = '请先填写密钥'; return; }
+    keyState.textContent = '正在验证密钥…';
+    const state = await checkKey(key);
+    if (state === 'invalid') { keyState.textContent = '密钥无效，没有保存'; return; }
+    await setDeepseekKey(key);
+    keyInput.value = '';
+    showKeyState(key);
+    if (state === 'offline') keyState.textContent += '（现在没联网，没法验证密钥）';
+  };
+  const clearKey = async () => { await setDeepseekKey(''); showKeyState(''); };
+
   const save = async () => {
     await saveSettings({ sessionSize: Number(size.value), newPerDay: Math.max(0, Number(newPer.value) || 0) });
     msg.textContent = '已保存';
@@ -128,6 +149,13 @@ export async function render(root, { navigate }) {
       h('div', { class: 'row' }, h('button', { onclick: save }, '保存'))),
     h('div', { class: 'card' }, h('h2', {}, '听写输入方式'), modeSel,
       h('div', { class: 'muted' }, '听写时也可以点右上角的按钮随时切换。')),
+    h('div', { class: 'card' }, h('h2', {}, '照片识别（DeepSeek）'),
+      h('div', { class: 'muted' }, '填了密钥后，拍照导入会把照片发给 DeepSeek 识别，比本机识别准得多，每张约 0.0015 元，需要联网。不填就用本机识别，离线也能用。密钥只存在这台 iPad 上，不会进备份文件。'),
+      keyInput,
+      h('div', { class: 'row' },
+        h('button', { onclick: saveKey }, '保存密钥'),
+        h('button', { class: 'secondary', onclick: clearKey }, '清除')),
+      keyState),
     h('div', { class: 'card' }, h('h2', {}, '发音'),
       h('div', { class: 'row' },
         h('button', { class: 'secondary', onclick: testVoice }, '🔊 测试英文发音'),

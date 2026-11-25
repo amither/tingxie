@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseText, cleanEn, cleanZh, entriesFromCells } from '../src/core/parser.js';
+import { parseText, cleanEn, cleanZh, entriesFromCells, entriesFromHtml } from '../src/core/parser.js';
 
 const en = (text) => parseText(text).entries;
 
@@ -160,4 +160,46 @@ test('entriesFromCells: 其他行英文置信度低，英文留空交给家长�
     entries: [{ en: 'in', zh: '在…里面' }],
     unrecognized: [{ en: '', zh: '几乎不' }],
   });
+});
+
+// ---- DeepSeek OCR 返回的 HTML 表格 ----
+const L11_HTML = `20:40
+
+Paper Check—First grammar&writing-Lesson 11
+
+<table>
+<tr><td>词汇</td><td>词性</td><td>词义</td><td>词汇</td><td>词性</td><td>词义</td></tr>
+<tr><td>in</td><td>prep.</td><td>在...里面</td><td>at the market</td><td>.</td><td>在市场</td></tr>
+<tr><td>on</td><td>prep.</td><td>在...上面</td><td>excited</td><td>adj.</td><td>激动的</td></tr>
+<tr><td>pond</td><td>n.</td><td>池塘</td><td>everywhere</td><td>.</td><td>任何地方；到处</td></tr>
+<tr><td colspan="3">Sentences</td><td colspan="3">中文</td></tr>
+<tr><td colspan="3">The market is a fun place.</td><td colspan="3">市集是一个有趣的地方。</td></tr>
+<tr><td colspan="6">Grammar: 方位介词: in / on / under</td></tr>
+</table>`;
+
+test('entriesFromHtml: 按表头找英文列和中文列，先左栏再右栏，到 Sentences 停', () => {
+  assert.deepEqual(entriesFromHtml(L11_HTML), {
+    entries: [
+      { en: 'in', zh: '在…里面' }, { en: 'on', zh: '在…上面' }, { en: 'pond', zh: '池塘' },
+      { en: 'at the market', zh: '在市场' }, { en: 'excited', zh: '激动的' }, { en: 'everywhere', zh: '任何地方；到处' },
+    ],
+    unrecognized: [],
+  });
+});
+
+test('entriesFromHtml: 表格写成一行、带 border 属性、HTML 实体', () => {
+  const html = '<table border=1><tr><td>词汇</td><td>词性</td><td>词义</td></tr><tr><td>feet</td><td>n.</td><td>脚(复数)</td></tr>'
+    + '<tr><td>don&#x27;t</td><td>v.</td><td>不</td></tr><tr><td>rock &amp; roll</td><td>n.</td><td>摇滚</td></tr></table>';
+  assert.deepEqual(entriesFromHtml(html).entries, [
+    { en: 'feet', zh: '脚（复数）' }, { en: "don't", zh: '不' }, { en: 'rock roll', zh: '摇滚' },
+  ]);
+});
+
+test('entriesFromHtml: 没有表头时，英文格后面第一个中文格是它的词义', () => {
+  const html = '<table><tr><td>apple</td><td>n.</td><td>苹果</td></tr><tr><td>red</td><td>adj.</td><td>红色的</td></tr></table>';
+  assert.deepEqual(entriesFromHtml(html).entries, [{ en: 'apple', zh: '苹果' }, { en: 'red', zh: '红色的' }]);
+});
+
+test('entriesFromHtml: 没有表格时按普通文字逐行解析', () => {
+  assert.deepEqual(entriesFromHtml('kite n. 风筝\napple 苹果').entries, [{ en: 'kite', zh: '风筝' }, { en: 'apple', zh: '苹果' }]);
 });

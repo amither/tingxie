@@ -1,9 +1,11 @@
-import { parseText, entriesFromCells } from '../core/parser.js';
+import { parseText, entriesFromCells, entriesFromHtml } from '../core/parser.js';
 import { toGray, estimateSkew, rotate, findCells, wordPairs, inset, crop, removeLines, resize } from '../core/table.js';
+import { deepseekOcr } from './deepseek.js';
 
 const MAX_SIDE = 3000;          // 再大的照片先缩到这个尺寸，免得 iPad 内存吃紧
 const CELL_TEXT_HEIGHT = 110;   // 逐格识别时把格子放大到这个高度左右
 const PAGE_SIDE = 2400;         // 整页识别时的目标尺寸
+const UPLOAD_SIDE = 2400;       // 上传给 DeepSeek 的照片最长边
 const EN_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ '-";
 
 let tesseractLoaded;
@@ -107,12 +109,14 @@ async function imageEntries(source, onProgress) {
   return readPage(img, onProgress);
 }
 
-async function pdfEntries(file, onProgress) {
+async function loadPdf(file) {
   const pdfjs = await import('../../vendor/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = new URL('vendor/pdf.worker.min.mjs', document.baseURI).href;
-  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  return pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+}
 
-  // 1) 先尝试文字层
+// PDF 的文字层（电子版 PDF 有，扫描版没有）
+async function pdfText(pdf, onProgress) {
   const lines = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     onProgress?.(`读取 PDF 第 ${p}/${pdf.numPages} 页`);
@@ -127,10 +131,11 @@ async function pdfEntries(file, onProgress) {
       lines.push(items.sort((a, b) => a.transform[4] - b.transform[4]).map((i) => i.str).join(' '));
     });
   }
-  const text = lines.join('\n');
-  if (text.replace(/\s/g, '').length >= 30) return parseText(text);
+  return lines.join('\n');
+}
 
-  // 2) 没有文字层：渲染成图片，和照片走同样的流程
+// 没有文字层的 PDF：每页渲染成图片，和照片走同样的本机识别流程
+async function pdfLocal(pdf, onProgress) {
   const entries = [], unrecognized = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
@@ -144,10 +149,42 @@ async function pdfEntries(file, onProgress) {
   return { entries, unrecognized };
 }
 
-// 返回 { entries: [{ en, zh }], unrecognized: [string | { en, zh }] }
-export async function extractEntries(file, onProgress) {
+// 照片缩小并转成 JPEG 再上传：iPad 拍的照片动辄几 MB，上传慢
+function toJpeg(source) {
+  const scale = Math.min(1, UPLOAD_SIDE / Math.max(source.width, source.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(source.width * scale);
+  canvas.height = Math.round(source.height * scale);
+  canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('图片转换失败'))), 'image/jpeg', 0.9));
+}
+
+// 返回 { entries: [{ en, zh }], unrecognized: [string | { en, zh }], notice? }。
+// 有 DeepSeek 密钥时照片（和没有文字层的 PDF）交给 DeepSeek 识别；没有密钥或调用失败时用本机识别，notice 说明原因
+export async function extractEntries(file, onProgress, { deepseekKey = '' } = {}) {
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-  if (isPdf) return pdfEntries(file, onProgress);
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  return imageEntries(bitmap, onProgress);
+  let pdf = null, bitmap = null;
+  if (isPdf) {
+    pdf = await loadPdf(file);
+    const text = await pdfText(pdf, onProgress);
+    if (text.replace(/\s/g, '').length >= 30) return parseText(text);
+  } else {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  }
+
+  let notice = '';
+  if (deepseekKey) {
+    try {
+      onProgress?.('DeepSeek 识别中，通常要几秒…');
+      const text = isPdf ? await deepseekOcr(file, file.name, deepseekKey) : await deepseekOcr(await toJpeg(bitmap), 'photo.jpg', deepseekKey);
+      const result = entriesFromHtml(text);
+      if (result.entries.length || result.unrecognized.length) return result;
+      notice = 'DeepSeek 没识别出词条，已改用本机识别。';
+    } catch (e) {
+      console.error(e);
+      notice = `DeepSeek 识别失败（${e.message}），已改用本机识别。`;
+    }
+  }
+  const result = isPdf ? await pdfLocal(pdf, onProgress) : await imageEntries(bitmap, onProgress);
+  return notice ? { ...result, notice } : result;
 }

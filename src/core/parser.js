@@ -95,3 +95,39 @@ export function entriesFromCells(rows) {
   }
   return { entries, unrecognized };
 }
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const decodeEntities = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+  if (e[0] === '#') return String.fromCodePoint(e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : Number(e.slice(1)));
+  return ENTITIES[e.toLowerCase()] ?? m;
+});
+const stripTags = (s) => decodeEntities(s.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' '));
+// 词性格（n. / adj. / 词组的 /. 或只剩一个点）不是英文
+const isPosCell = (s) => new RegExp(`^(?:${POS}|/)?\\s*[.。]?$`, 'i').test(s.trim());
+
+// DeepSeek OCR 的结果：表格是 HTML（<table><tr><td>…）。每行里英文格后面、下一个英文格之前的第一个中文格是它的词义；
+// 表头、词性格自然被跳过。没有表格时去掉标记按普通文字逐行解析。
+export function entriesFromHtml(text) {
+  const tables = [...text.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)].map((m) => m[1]);
+  if (!tables.length) return parseText(stripTags(text));
+  const rows = [];
+  for (const table of tables) {
+    for (const tr of table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const cells = [...tr[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) => stripTags(c[1]).trim());
+      const pairs = [];
+      let en = null;
+      for (const cell of cells) {
+        if (!cell || isPosCell(cell)) continue;
+        if (HAS_CJK.test(cell)) {
+          if (en !== null) { pairs.push({ en, zh: cell }); en = null; }
+        } else if (/[A-Za-z]/.test(cell)) {
+          if (en !== null) pairs.push({ en, zh: '' }); // 上一个英文没有词义
+          en = cell;
+        }
+      }
+      if (en !== null) pairs.push({ en, zh: '' });
+      if (pairs.length) rows.push(pairs);
+    }
+  }
+  return entriesFromCells(rows);
+}

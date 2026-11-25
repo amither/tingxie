@@ -22,7 +22,8 @@ async function run(storeName, mode, fn) {
   return new Promise((resolve, reject) => {
     const tx = d.transaction(storeName, mode);
     const result = fn(tx.objectStore(storeName));
-    tx.oncomplete = () => resolve(result?.result ?? result);
+    // fn 返回读请求时取它的结果（键不存在时是 undefined）；写操作返回 undefined
+    tx.oncomplete = () => resolve(result instanceof IDBRequest ? result.result : result);
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });
@@ -41,6 +42,10 @@ export async function getSettings() {
 // 只改传入的字段，其余设置保持不变
 export const saveSettings = async (patch) => setMeta('settings', { ...(await getSettings()), ...patch });
 export const getLastBackupAt = () => getMeta('lastBackupAt');
+
+// DeepSeek 密钥单独存放，不放进 settings：备份文件里不会带上它，导入备份也不会覆盖它
+export const getDeepseekKey = async () => (await getMeta('deepseekKey')) ?? '';
+export const setDeepseekKey = (key) => setMeta('deepseekKey', key);
 
 export async function buildBackup() {
   return { app: 'tingxie', version: 1, exportedAt: Date.now(), settings: await getSettings(), cards: await getAllCards() };

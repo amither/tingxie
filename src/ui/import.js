@@ -1,5 +1,5 @@
 import { h, mount } from './dom.js';
-import { getAllCards, putCards } from '../data/store.js';
+import { getAllCards, putCards, getDeepseekKey } from '../data/store.js';
 import { newCard } from '../core/scheduler.js';
 import { extractEntries } from '../platform/importer.js';
 
@@ -14,9 +14,10 @@ export async function render(root, { navigate }) {
       if (!file) return;
       try {
         status.textContent = '处理中，请稍候…';
-        const { entries, unrecognized } = await extractEntries(file, (msg) => { status.textContent = msg; });
-        if (!entries.length && !unrecognized.length) { status.textContent = '没识别出内容，可以换一张更清晰的照片，或手动添加。'; return; }
-        await showReview(root, navigate, entries, unrecognized, defaultBatch(file));
+        const deepseekKey = await getDeepseekKey();
+        const { entries, unrecognized, notice } = await extractEntries(file, (msg) => { status.textContent = msg; }, { deepseekKey });
+        if (!entries.length && !unrecognized.length) { status.textContent = (notice ?? '') + '没识别出内容，可以换一张更清晰的照片，或手动添加。'; return; }
+        await showReview(root, navigate, entries, unrecognized, defaultBatch(file), notice);
       } catch (e) {
         console.error(e);
         status.textContent = '识别失败：' + e.message;
@@ -37,7 +38,7 @@ export async function render(root, { navigate }) {
   );
 }
 
-async function showReview(root, navigate, entries, unrecognized, batchDefault) {
+async function showReview(root, navigate, entries, unrecognized, batchDefault, notice = '') {
   const existing = new Map((await getAllCards()).map((c) => [c.en.toLowerCase(), c]));
   const rows = [
     ...entries.map((e) => ({ en: e.en, zh: e.zh, flagged: false, onDup: 'skip' })),
@@ -97,6 +98,7 @@ async function showReview(root, navigate, entries, unrecognized, batchDefault) {
   draw();
   mount(root,
     h('h1', {}, '校对词表'),
+    notice ? h('div', { class: 'notice' }, notice) : '',
     h('div', { class: 'muted' }, '红底：没认全，缺的英文或中文请补上；黄底：和已有单词重复。确认无误后保存。'),
     h('h2', {}, '批次名'), batchInput,
     h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, '英文'), h('th', {}, '中文'), h('th', {}), h('th', {}))), tbody),

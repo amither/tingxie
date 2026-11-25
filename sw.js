@@ -3,7 +3,7 @@ const CACHE = 'tingxie-' + self.APP_VERSION; // 旧版本的缓存会在 activat
 const CORE = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest', 'version.js',
   'src/app.js', 'src/core/scheduler.js', 'src/core/parser.js', 'src/core/session.js', 'src/core/assemble.js', 'src/core/table.js',
-  'src/data/store.js', 'src/platform/speech.js', 'src/platform/importer.js', 'src/platform/letters.js',
+  'src/data/store.js', 'src/platform/speech.js', 'src/platform/importer.js', 'src/platform/deepseek.js', 'src/platform/letters.js',
   'src/ui/dom.js', 'src/ui/selection.js', 'src/ui/pad.js', 'src/ui/home.js', 'src/ui/dictation.js', 'src/ui/import.js', 'src/ui/words.js', 'src/ui/settings.js',
   'icons/icon-180.png', 'icons/icon-512.png',
   'models/letters.json', 'models/letters.bin',
