@@ -27,5 +27,10 @@ async function render() {
 window.addEventListener('hashchange', render);
 requestPersistence();
 render();
-// updateViaCache: 'none'：检查更新时 sw.js 和它引入的 version.js 都绕过 HTTP 缓存
-if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+// 第一次打开时注册离线缓存。已经注册过就不再重复注册：换成别的地址会触发一次重装。
+// 升级由设置页的“检查并更新”用新版本号的地址重新注册（见 settings.js）
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.getRegistration().then((reg) => {
+    if (!reg) navigator.serviceWorker.register(`sw.js?v=${encodeURIComponent(self.APP_VERSION)}`, { updateViaCache: 'none' });
+  });
+}

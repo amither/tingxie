@@ -12,32 +12,37 @@ async function fetchLatestVersion() {
   return m[1];
 }
 
-// 立即更新：1) 新版本已下载好但页面还没换上 → 直接重新加载；2) 去检查服务器上有没有新版本，装好后重新加载
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const UPDATE_TIMEOUT_MS = 120000;
+
+// 立即更新：去服务器取最新版本号，用带这个版本号的地址重新注册 Service Worker（地址变了，浏览器一定会重新下载安装），
+// 等新版本接管后重新加载页面。不用 reg.update()：iOS Safari 上它可能读到 HTTP 缓存里的旧文件，认为“没有更新”
 async function updateNow(say, current) {
-  const reg = await navigator.serviceWorker?.getRegistration();
-  if (!reg) { say('没有启用离线缓存，直接刷新页面…'); location.reload(); return; }
-
-  const cachedVersion = (await caches.keys()).find((k) => k.startsWith('tingxie-'))?.slice('tingxie-'.length);
-  if (cachedVersion && cachedVersion !== current) {
-    say(`新版本 ${cachedVersion} 已下载好，正在重新打开…`); location.reload(); return;
-  }
-
   say('正在检查更新…');
-  await reg.update();
-  const worker = reg.installing ?? reg.waiting;
-  if (!worker) { say('没有发现新版本。如果刚刚发布过，请等几分钟再试。'); return; }
+  const latest = await fetchLatestVersion();
+  if (latest === current) { say('已是最新版本 ✓'); return; }
+  if (!navigator.serviceWorker || !window.isSecureContext) { say('正在刷新页面…'); location.reload(); return; }
 
-  say('发现新版本，正在下载…');
-  await new Promise((resolve, reject) => {
-    const check = () => {
-      if (worker.state === 'activated') resolve();
-      else if (worker.state === 'redundant') reject(new Error('安装失败，请稍后再试'));
-    };
-    worker.addEventListener('statechange', check);
-    check();
-  });
-  say('更新完成，正在重新打开…');
-  location.reload();
+  const cached = (await caches.keys()).find((k) => k.startsWith('tingxie-'))?.slice('tingxie-'.length);
+  if (cached === latest) { say(`新版本 ${latest} 已下载好，正在重新打开…`); location.reload(); return; }
+
+  say(`发现新版本 ${latest}，正在下载…`);
+  const reg = await navigator.serviceWorker.register(`sw.js?v=${encodeURIComponent(latest)}`, { updateViaCache: 'none' });
+  const isLatest = (w) => w && new URL(w.scriptURL).searchParams.get('v') === latest;
+  // 轮询而不是只等 statechange 事件：Safari 上 register() 返回时新 worker 可能还没出现
+  let seen = null;
+  const deadline = Date.now() + UPDATE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (isLatest(reg.active) && reg.active.state === 'activated') {
+      say('更新完成，正在重新打开…');
+      location.reload();
+      return;
+    }
+    seen = [reg.installing, reg.waiting, reg.active].find(isLatest) ?? seen;
+    if (seen?.state === 'redundant') throw new Error('新版本安装失败，请检查网络后再试');
+    await sleep(300);
+  }
+  throw new Error('下载新版本超时，请检查网络后再试');
 }
 
 export async function render(root, { navigate }) {
@@ -56,7 +61,7 @@ export async function render(root, { navigate }) {
     (latest) => {
       latestLine.textContent = latest === current
         ? '已是最新版本 ✓'
-        : `服务器上有新版本 ${latest}：请完全关闭应用后重新打开（必要时重复一次）`;
+        : `服务器上有新版本 ${latest}：点下面的按钮更新`;
     },
     () => { latestLine.textContent = '无法检查最新版本（可能没有网络）'; },
   );

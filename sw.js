@@ -1,4 +1,7 @@
-importScripts('version.js'); // 定义 self.APP_VERSION；它的内容变化也会触发 Service Worker 更新
+// 注册地址带版本号（sw.js?v=v20）：每个版本的地址都不同，浏览器一定会重新下载安装，
+// 不依赖 HTTP 缓存，也不依赖浏览器去比对 importScripts 的内容（iOS Safari 在这两点上都不可靠）
+const V = new URL(self.location.href).searchParams.get('v');
+importScripts(V ? `version.js?v=${encodeURIComponent(V)}` : 'version.js'); // 定义 self.APP_VERSION
 const CACHE = 'tingxie-' + self.APP_VERSION; // 旧版本的缓存会在 activate 时清掉
 const CORE = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest', 'version.js',
