@@ -131,3 +131,16 @@ export function entriesFromHtml(text) {
   }
   return entriesFromCells(rows);
 }
+
+// 词表标题（如 “First grammar&writing-Lesson 8”），和 PDF 导入时用文件名得到的批次名一致。
+// 取表格之外第一个带 Lesson/Unit 编号的行；去掉 “Paper Check—” 前缀、“.pdf” 后缀和两边的杂字符。找不到返回 null
+const TITLE = /[A-Za-z][A-Za-z0-9&'’ .\-–—]*?\b(?:lesson|unit)\s*\d+/i;
+export function titleFromText(text) {
+  const outside = text.replace(/<table\b[\s\S]*?<\/table>/gi, '\n');
+  for (const raw of outside.split(/\r?\n/)) {
+    const line = stripTags(raw).replace(/^.*?paper\s*check\s*[-–—:：]*\s*/i, '');
+    const m = TITLE.exec(line);
+    if (m) return m[0].replace(/\s+/g, ' ').trim();
+  }
+  return null;
+}

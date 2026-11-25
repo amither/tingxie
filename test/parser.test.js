@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseText, cleanEn, cleanZh, entriesFromCells, entriesFromHtml } from '../src/core/parser.js';
+import { parseText, cleanEn, cleanZh, entriesFromCells, entriesFromHtml, titleFromText } from '../src/core/parser.js';
 
 const en = (text) => parseText(text).entries;
 
@@ -202,4 +202,28 @@ test('entriesFromHtml: 没有表头时，英文格后面第一个中文格是它
 
 test('entriesFromHtml: 没有表格时按普通文字逐行解析', () => {
   assert.deepEqual(entriesFromHtml('kite n. 风筝\napple 苹果').entries, [{ en: 'kite', zh: '风筝' }, { en: 'apple', zh: '苹果' }]);
+});
+
+// ---- 从识别出的文字里取词表标题（和 PDF 文件名一致） ----
+test('titleFromText: 去掉 “Paper Check—” 前缀，得到和 PDF 文件名一样的标题', () => {
+  assert.equal(titleFromText('考拉英语\nKOALA ENGLISH\n\nPaper Check—First grammar&writing-Lesson 8\n\nK\n<table>…'), 'First grammar&writing-Lesson 8');
+});
+
+test('titleFromText: 截图顶部的 PDF 文件名（带 .pdf）也能用', () => {
+  assert.equal(titleFromText('20:40\n\nFirst grammar&writing-Lesson 11.pdf\n\n考拉英语'), 'First grammar&writing-Lesson 11');
+});
+
+test('titleFromText: 本机识别时标题两边的杂字符去掉', () => {
+  assert.equal(titleFromText('SnRis Paper Check—First grammar&writing-Lesson 11 好'), 'First grammar&writing-Lesson 11');
+  assert.equal(titleFromText('Paper Check - First grammar&writing-Lesson 12 |'), 'First grammar&writing-Lesson 12');
+});
+
+test('titleFromText: Unit 也算标题；表格里的内容不算', () => {
+  assert.equal(titleFromText('Starter Book Unit 3\n<table><tr><td>in</td></tr></table>'), 'Starter Book Unit 3');
+  assert.equal(titleFromText('<table><tr><td>Lesson 3 is fun</td><td>第三课</td></tr></table>'), null);
+});
+
+test('titleFromText: 找不到标题返回 null', () => {
+  assert.equal(titleFromText('kite n. 风筝\napple 苹果'), null);
+  assert.equal(titleFromText(''), null);
 });

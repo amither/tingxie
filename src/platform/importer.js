@@ -1,4 +1,4 @@
-import { parseText, entriesFromCells, entriesFromHtml } from '../core/parser.js';
+import { parseText, entriesFromCells, entriesFromHtml, titleFromText } from '../core/parser.js';
 import { toGray, estimateSkew, rotate, findCells, wordPairs, inset, crop, removeLines, resize } from '../core/table.js';
 import { deepseekOcr } from './deepseek.js';
 
@@ -87,13 +87,24 @@ async function readCells(img, rows, onProgress) {
   return entriesFromCells(texts);
 }
 
+// 标题在表格上方：只识别这一条，找不到返回 null
+async function readTitle(img, tableTop) {
+  const bottom = tableTop - 4;
+  if (bottom < 20) return null;
+  const strip = { x0: 0, y0: 0, x1: img.width - 1, y1: bottom };
+  const f = Math.max(1, Math.min(3, PAGE_SIDE / img.width));
+  const worker = await getWorker('eng', { tessedit_pageseg_mode: '3' });
+  const { data } = await worker.recognize(grayToCanvas(crop(img, strip, f)));
+  return titleFromText(data.text);
+}
+
 // 找不到格子（不是表格、拍得太斜）时：去掉表格线后整页识别，再按行解析
 async function readPage(img, onProgress) {
   onProgress?.('整页识别中…');
   const worker = await getWorker('eng+chi_sim', { preserve_interword_spaces: '1' });
   const f = Math.max(1, Math.min(3, PAGE_SIDE / Math.max(img.width, img.height)));
   const { data } = await worker.recognize(grayToCanvas(resize(removeLines(img), f)));
-  return parseText(data.text);
+  return { ...parseText(data.text), title: titleFromText(data.text) };
 }
 
 async function imageEntries(source, onProgress) {
@@ -104,7 +115,7 @@ async function imageEntries(source, onProgress) {
   const rows = wordPairs(findCells(img));
   if (rows.reduce((n, pairs) => n + pairs.length, 0) >= 3) {
     const result = await readCells(img, rows, onProgress);
-    if (result.entries.length >= 3) return result;
+    if (result.entries.length >= 3) return { ...result, title: await readTitle(img, rows[0][0].en.y0) }; // 标题在词表第一行（表头）上方
   }
   return readPage(img, onProgress);
 }
@@ -137,6 +148,7 @@ async function pdfText(pdf, onProgress) {
 // 没有文字层的 PDF：每页渲染成图片，和照片走同样的本机识别流程
 async function pdfLocal(pdf, onProgress) {
   const entries = [], unrecognized = [];
+  let title = null;
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const viewport = page.getViewport({ scale: 2 });
@@ -145,8 +157,9 @@ async function pdfLocal(pdf, onProgress) {
     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
     const r = await imageEntries(canvas, (msg) => onProgress?.(`第 ${p}/${pdf.numPages} 页 ${msg}`));
     entries.push(...r.entries); unrecognized.push(...r.unrecognized);
+    title ??= r.title;
   }
-  return { entries, unrecognized };
+  return { entries, unrecognized, title };
 }
 
 // 照片缩小并转成 JPEG 再上传：iPad 拍的照片动辄几 MB，上传慢
@@ -159,7 +172,7 @@ function toJpeg(source) {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('图片转换失败'))), 'image/jpeg', 0.9));
 }
 
-// 返回 { entries: [{ en, zh }], unrecognized: [string | { en, zh }], notice? }。
+// 返回 { entries: [{ en, zh }], unrecognized: [string | { en, zh }], title?, notice? }。title 是从词表里认出的标题（如 Lesson 8），PDF 不用它（用文件名）。
 // 有 DeepSeek 密钥时照片（和没有文字层的 PDF）交给 DeepSeek 识别；没有密钥或调用失败时用本机识别，notice 说明原因
 export async function extractEntries(file, onProgress, { deepseekKey = '' } = {}) {
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
@@ -178,7 +191,7 @@ export async function extractEntries(file, onProgress, { deepseekKey = '' } = {}
       onProgress?.('DeepSeek 识别中，通常要几秒…');
       const text = isPdf ? await deepseekOcr(file, file.name, deepseekKey) : await deepseekOcr(await toJpeg(bitmap), 'photo.jpg', deepseekKey);
       const result = entriesFromHtml(text);
-      if (result.entries.length || result.unrecognized.length) return result;
+      if (result.entries.length || result.unrecognized.length) return { ...result, title: titleFromText(text) };
       notice = 'DeepSeek 没识别出词条，已改用本机识别。';
     } catch (e) {
       console.error(e);

@@ -3,7 +3,11 @@ import { getAllCards, putCards, getDeepseekKey } from '../data/store.js';
 import { newCard } from '../core/scheduler.js';
 import { extractEntries } from '../platform/importer.js';
 
-const defaultBatch = (file) => (file?.name ?? '').replace(/\.[^.]+$/, '') || new Date().toISOString().slice(0, 10);
+const today = () => new Date().toISOString().slice(0, 10);
+const isPdf = (file) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+// 批次名：PDF 用文件名（如 “First grammar&writing-Lesson 8”）；照片的文件名没有意义（image、IMG_0932），
+// 用从词表里认出的标题，和导入 PDF 时得到的名字一样；都没有就用日期
+const batchName = (file, title) => (file && isPdf(file) ? file.name.replace(/\.[^.]+$/, '') : title) || today();
 
 export async function render(root, { navigate }) {
   const status = h('div', { class: 'muted' });
@@ -15,9 +19,9 @@ export async function render(root, { navigate }) {
       try {
         status.textContent = '处理中，请稍候…';
         const deepseekKey = await getDeepseekKey();
-        const { entries, unrecognized, notice } = await extractEntries(file, (msg) => { status.textContent = msg; }, { deepseekKey });
+        const { entries, unrecognized, notice, title } = await extractEntries(file, (msg) => { status.textContent = msg; }, { deepseekKey });
         if (!entries.length && !unrecognized.length) { status.textContent = (notice ?? '') + '没识别出内容，可以换一张更清晰的照片，或手动添加。'; return; }
-        await showReview(root, navigate, entries, unrecognized, defaultBatch(file), notice);
+        await showReview(root, navigate, entries, unrecognized, batchName(file, title), notice);
       } catch (e) {
         console.error(e);
         status.textContent = '识别失败：' + e.message;
@@ -32,7 +36,7 @@ export async function render(root, { navigate }) {
     h('div', { class: 'row' },
       h('button', { onclick: () => pick('image/*') }, '📷 拍照 / 选图片'),
       h('button', { onclick: () => pick('application/pdf,.pdf') }, '📄 选 PDF'),
-      h('button', { class: 'secondary', onclick: () => showReview(root, navigate, [], [], defaultBatch()) }, '✍️ 手动添加')),
+      h('button', { class: 'secondary', onclick: () => showReview(root, navigate, [], [], today()) }, '✍️ 手动添加')),
     status,
     h('button', { class: 'secondary small', onclick: () => navigate('home') }, '返回'),
   );
