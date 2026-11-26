@@ -11,8 +11,11 @@ export async function render(root, { navigate }) {
   const nodes = [h('h1', {}, '英语听写')];
 
   if (cards.length === 0) {
-    nodes.push(h('div', { class: 'notice' }, '还没有单词，先导入吧。'),
-      h('button', { class: 'big', onclick: () => navigate('import') }, '导入单词'));
+    // 没有词时也要能进设置：换新 iPad 后从 iCloud 恢复、先填 DeepSeek 密钥再拍照导入、检查更新都在那里
+    nodes.push(h('div', { class: 'notice' }, '还没有单词，先导入吧。换了新 iPad 的话，可以到设置里从 iCloud 恢复。'),
+      h('button', { class: 'big', onclick: () => navigate('import') }, '导入单词'),
+      h('div', { class: 'row' },
+        h('button', { class: 'secondary', onclick: () => navigate('settings') }, '设置')));
   } else {
     const nothing = due + newAvail === 0;
     const canPractice = cards.some((c) => !isNew(c)); // 今天做完后还能再练学过的词
